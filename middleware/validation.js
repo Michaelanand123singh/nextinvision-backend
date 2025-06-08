@@ -1,4 +1,3 @@
-
 // middleware/validation.js
 const { body, validationResult } = require('express-validator');
 
@@ -43,18 +42,39 @@ exports.validateContact = [
   handleValidationErrors
 ];
 
-// Portfolio validation
+// Portfolio validation - UPDATED
 exports.validatePortfolio = [
   body('title').trim().notEmpty().withMessage('Title is required'),
   body('description').optional().trim(),
   body('category').optional().trim(),
   body('image').optional().trim(),
-  body('url').optional().isURL().withMessage('URL must be valid'),
+  body('url').optional().custom((value) => {
+    if (value && value.trim() !== '') {
+      try {
+        new URL(value);
+        return true;
+      } catch (err) {
+        throw new Error('URL must be valid');
+      }
+    }
+    return true;
+  }),
   body('featured').optional().isBoolean().withMessage('Featured must be a boolean'),
-  body('type').optional().isIn(['TechProject', 'DigitalMarketingCampaign']).withMessage('Invalid type'),
+  // FIXED: Added 'Portfolio' to allowed types and made validation more flexible
+  body('type').optional().isIn(['Portfolio', 'TechProject', 'DigitalMarketingCampaign']).withMessage('Invalid type. Must be Portfolio, TechProject, or DigitalMarketingCampaign'),
   body('technologies').optional().isArray().withMessage('Technologies must be an array'),
   body('client').optional().trim(),
   body('services').optional().isArray().withMessage('Services must be an array'),
+  // Add validation for metrics object
+  body('metrics').optional().isObject().withMessage('Metrics must be an object'),
+  body('metrics.users').optional().trim(),
+  body('metrics.transactions').optional().trim(),
+  body('metrics.uptime').optional().trim(),
+  body('metrics.performance').optional().trim(),
+  body('metrics.organicTraffic').optional().trim(),
+  body('metrics.keywordRankings').optional().trim(),
+  body('metrics.conversionRate').optional().trim(),
+  body('metrics.timeframe').optional().trim(),
   handleValidationErrors
 ];
 
