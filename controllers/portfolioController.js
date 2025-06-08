@@ -1,5 +1,5 @@
 // controllers/portfolioController.js - Improved Version
-const { Portfolio, TechProject, DigitalMarketingCampaign } = require('../models/Portfolio');
+const { Portfolio, BasicPortfolio, TechProject, DigitalMarketingCampaign } = require('../models/Portfolio');
 
 exports.createPortfolio = async (req, res) => {
   try {
@@ -40,9 +40,10 @@ exports.createPortfolio = async (req, res) => {
       case 'DigitalMarketingCampaign':
         portfolio = await DigitalMarketingCampaign.create(cleanData);
         break;
+      case 'Portfolio':
       default:
-        // Default Portfolio type
-        portfolio = await Portfolio.create(cleanData);
+        // Use BasicPortfolio discriminator for 'Portfolio' type
+        portfolio = await BasicPortfolio.create(cleanData);
     }
     
     res.status(201).json({

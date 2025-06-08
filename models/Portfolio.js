@@ -1,4 +1,4 @@
-// models/Portfolio.js - Improved Version
+// models/Portfolio.js - Fixed Version
 const mongoose = require('mongoose');
 
 const options = { discriminatorKey: 'type', timestamps: true };
@@ -36,22 +36,19 @@ const BasePortfolioSchema = new mongoose.Schema({
 // Create the base Portfolio model
 const Portfolio = mongoose.model('Portfolio', BasePortfolioSchema);
 
-// TechProject discriminator (inherits all base fields)
-const TechProjectSchema = new mongoose.Schema({
-  // Additional tech-specific fields if needed
-}, options);
-
-// DigitalMarketingCampaign discriminator (inherits all base fields)
-const DigitalMarketingCampaignSchema = new mongoose.Schema({
-  // Additional marketing-specific fields if needed
+// Create a basic Portfolio discriminator for the default type
+const BasicPortfolioSchema = new mongoose.Schema({
+  // No additional fields needed for basic portfolio
 }, options);
 
 // Create discriminators
-const TechProject = Portfolio.discriminator('TechProject', TechProjectSchema);
-const DigitalMarketingCampaign = Portfolio.discriminator('DigitalMarketingCampaign', DigitalMarketingCampaignSchema);
+const BasicPortfolio = Portfolio.discriminator('Portfolio', BasicPortfolioSchema);
+const TechProject = Portfolio.discriminator('TechProject', new mongoose.Schema({}, options));
+const DigitalMarketingCampaign = Portfolio.discriminator('DigitalMarketingCampaign', new mongoose.Schema({}, options));
 
 module.exports = {
   Portfolio,
+  BasicPortfolio,
   TechProject,
   DigitalMarketingCampaign
 };
