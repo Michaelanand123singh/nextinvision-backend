@@ -53,11 +53,19 @@ app.use(xss());
 // Prevent parameter pollution
 app.use(hpp());
 
-// CORS configuration
+// CORS configuration - UPDATED TO FIX THE ISSUE
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://admin.nextinvision.com',
+  process.env.FRONTEND_URL
+].filter(Boolean); // Remove any undefined values
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Static files
@@ -78,7 +86,8 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    allowedOrigins: allowedOrigins // Add this to debug CORS configuration
   });
 });
 
@@ -147,6 +156,7 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log('Allowed CORS origins:', allowedOrigins);
 });
 
 // Handle unhandled promise rejections
