@@ -56,6 +56,7 @@ app.use(hpp());
 // CORS configuration - UPDATED TO FIX THE ISSUE
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:5173',
   'https://admin.nextinvision.com',
   process.env.FRONTEND_URL
 ].filter(Boolean); // Remove any undefined values
