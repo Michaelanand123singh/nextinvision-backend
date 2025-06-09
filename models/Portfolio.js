@@ -33,18 +33,32 @@ const BasePortfolioSchema = new mongoose.Schema({
   }
 }, options);
 
-// Create the base Portfolio model
-const Portfolio = mongoose.model('Portfolio', BasePortfolioSchema);
+// Check if models already exist to prevent OverwriteModelError
+let Portfolio, BasicPortfolio, TechProject, DigitalMarketingCampaign;
 
-// Create a basic Portfolio discriminator for the default type
-const BasicPortfolioSchema = new mongoose.Schema({
-  // No additional fields needed for basic portfolio
-}, options);
-
-// Create discriminators
-const BasicPortfolio = Portfolio.discriminator('Portfolio', BasicPortfolioSchema);
-const TechProject = Portfolio.discriminator('TechProject', new mongoose.Schema({}, options));
-const DigitalMarketingCampaign = Portfolio.discriminator('DigitalMarketingCampaign', new mongoose.Schema({}, options));
+try {
+  // Try to get existing models
+  Portfolio = mongoose.model('Portfolio');
+  BasicPortfolio = mongoose.model('BasicPortfolio');
+  TechProject = mongoose.model('TechProject');
+  DigitalMarketingCampaign = mongoose.model('DigitalMarketingCampaign');
+} catch (error) {
+  // Models don't exist, create them
+  Portfolio = mongoose.model('Portfolio', BasePortfolioSchema);
+  
+  // Create discriminators with different names than the base model
+  BasicPortfolio = Portfolio.discriminator('BasicPortfolio', new mongoose.Schema({
+    // No additional fields needed for basic portfolio
+  }, options));
+  
+  TechProject = Portfolio.discriminator('TechProject', new mongoose.Schema({
+    // You can add tech-specific fields here if needed
+  }, options));
+  
+  DigitalMarketingCampaign = Portfolio.discriminator('DigitalMarketingCampaign', new mongoose.Schema({
+    // You can add marketing-specific fields here if needed
+  }, options));
+}
 
 module.exports = {
   Portfolio,

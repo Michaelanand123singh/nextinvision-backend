@@ -20,6 +20,7 @@ const portfolioRoutes = require('./routes/portfolio');
 const serviceRoutes = require('./routes/service');
 const teamRoutes = require('./routes/team');
 const testimonialRoutes = require('./routes/testimonial');
+const projectRoutes = require('./routes/project');
 
 // Connect to database
 connectDB();
@@ -80,6 +81,7 @@ app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/testimonials', testimonialRoutes);
+app.use('/api/projects', projectRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
