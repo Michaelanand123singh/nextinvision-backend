@@ -267,12 +267,13 @@ exports.deleteProject = async (req, res) => {
   }
 };
 
-// Get project statistics
+// Get project statistics - UPDATED AND FIXED
 exports.getProjectStats = async (req, res) => {
   try {
+    console.log('Getting project stats for user:', req.user._id);
     const userId = req.user._id;
 
-    // Get basic counts
+    // Get basic counts using simple queries
     const totalProjects = await Project.countDocuments({ createdBy: userId });
     const upcomingProjects = await Project.countDocuments({ 
       createdBy: userId, 
@@ -291,18 +292,38 @@ exports.getProjectStats = async (req, res) => {
       status: 'on_hold' 
     });
 
-    // Get total budget
-    const budgetStats = await Project.aggregate([
-      { $match: { createdBy: mongoose.Types.ObjectId(userId) } },
-      {
-        $group: {
-          _id: null,
-          totalBudget: { $sum: '$budget' },
-          averageBudget: { $avg: '$budget' },
-          averageProgress: { $avg: '$progress' }
+    // Get budget and progress stats - FIXED ObjectId usage
+    let budgetStats = [{
+      totalBudget: 0,
+      averageBudget: 0,
+      averageProgress: 0
+    }];
+
+    try {
+      budgetStats = await Project.aggregate([
+        { $match: { createdBy: new mongoose.Types.ObjectId(userId) } }, // ✅ Fixed: added 'new'
+        {
+          $group: {
+            _id: null,
+            totalBudget: { $sum: '$budget' },
+            averageBudget: { $avg: '$budget' },
+            averageProgress: { $avg: '$progress' }
+          }
         }
-      }
-    ]);
+      ]);
+    } catch (aggregationError) {
+      console.warn('Aggregation failed, using fallback:', aggregationError.message);
+      // Fallback to simple queries if aggregation fails
+      const allProjects = await Project.find({ createdBy: userId });
+      const totalBudget = allProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
+      const totalProgress = allProjects.reduce((sum, p) => sum + (p.progress || 0), 0);
+      
+      budgetStats = [{
+        totalBudget,
+        averageBudget: allProjects.length > 0 ? totalBudget / allProjects.length : 0,
+        averageProgress: allProjects.length > 0 ? totalProgress / allProjects.length : 0
+      }];
+    }
 
     // Get overdue projects
     const overdueProjects = await Project.countDocuments({
@@ -311,16 +332,33 @@ exports.getProjectStats = async (req, res) => {
       status: { $nin: ['completed'] }
     });
 
-    // Get projects by priority
-    const priorityStats = await Project.aggregate([
-      { $match: { createdBy: mongoose.Types.ObjectId(userId) } },
-      {
-        $group: {
-          _id: '$priority',
-          count: { $sum: 1 }
+    // Get projects by priority - FIXED ObjectId usage
+    let priorityStats = [];
+    try {
+      priorityStats = await Project.aggregate([
+        { $match: { createdBy: new mongoose.Types.ObjectId(userId) } }, // ✅ Fixed: added 'new'
+        {
+          $group: {
+            _id: '$priority',
+            count: { $sum: 1 }
+          }
         }
-      }
-    ]);
+      ]);
+    } catch (priorityError) {
+      console.warn('Priority aggregation failed, using fallback:', priorityError.message);
+      // Fallback to simple counting
+      const projects = await Project.find({ createdBy: userId });
+      const priorityCounts = {};
+      projects.forEach(p => {
+        if (p.priority) {
+          priorityCounts[p.priority] = (priorityCounts[p.priority] || 0) + 1;
+        }
+      });
+      priorityStats = Object.entries(priorityCounts).map(([priority, count]) => ({
+        _id: priority,
+        count
+      }));
+    }
 
     // Get recent projects (last 30 days)
     const thirtyDaysAgo = new Date();
@@ -331,6 +369,14 @@ exports.getProjectStats = async (req, res) => {
       createdAt: { $gte: thirtyDaysAgo }
     });
 
+    // Get recent project details for display
+    const recentProjectsList = await Project.find({
+      createdBy: userId
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('title status priority progress createdAt');
+
     const stats = {
       totalProjects,
       statusBreakdown: {
@@ -340,7 +386,9 @@ exports.getProjectStats = async (req, res) => {
         on_hold: onHoldProjects
       },
       priorityBreakdown: priorityStats.reduce((acc, item) => {
-        acc[item._id] = item.count;
+        if (item._id) { // Only include non-null priorities
+          acc[item._id] = item.count;
+        }
         return acc;
       }, {}),
       budgetStats: budgetStats[0] || {
@@ -350,8 +398,18 @@ exports.getProjectStats = async (req, res) => {
       },
       overdueProjects,
       recentProjects,
+      recentProjectsList: recentProjectsList.map(project => ({
+        id: project._id,
+        title: project.title,
+        status: project.status,
+        priority: project.priority,
+        progress: project.progress || 0,
+        createdAt: project.createdAt
+      })),
       completionRate: totalProjects > 0 ? ((completedProjects / totalProjects) * 100).toFixed(1) : 0
     };
+
+    console.log('Project stats calculated successfully:', { totalProjects });
 
     res.status(200).json({
       success: true,
@@ -359,10 +417,12 @@ exports.getProjectStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Get project stats error:', error);
+    console.error('Error stack:', error.stack);
+    
     res.status(500).json({
       success: false,
       message: 'Failed to fetch project statistics',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 };
@@ -399,8 +459,15 @@ exports.updateProjectProgress = async (req, res) => {
       });
     }
 
-    // Use the instance method to update progress
-    await project.updateProgress(progress);
+    // Check if project has updateProgress method, otherwise update directly
+    if (typeof project.updateProgress === 'function') {
+      await project.updateProgress(progress);
+    } else {
+      project.progress = progress;
+      project.updatedBy = req.user._id;
+      await project.save();
+    }
+    
     await project.populate('createdBy', 'name email');
 
     res.status(200).json({
