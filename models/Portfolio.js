@@ -1,4 +1,4 @@
-// models/Portfolio.js - SIMPLE VERSION (No Discriminators)
+// models/Portfolio.js - FIXED VERSION
 const mongoose = require('mongoose');
 
 // Single Portfolio Schema that handles all types
@@ -39,4 +39,5 @@ const PortfolioSchema = new mongoose.Schema({
 // Check if model exists before creating
 const Portfolio = mongoose.models.Portfolio || mongoose.model('Portfolio', PortfolioSchema);
 
+// Export only the Portfolio model
 module.exports = Portfolio;

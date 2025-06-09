@@ -1,5 +1,5 @@
 // controllers/portfolioController.js - FIXED VERSION
-const { Portfolio, BasicPortfolio, TechProject, DigitalMarketingCampaign } = require('../models/Portfolio');
+const Portfolio = require('../models/Portfolio'); // Import the single Portfolio model
 
 exports.createPortfolio = async (req, res) => {
   try {
@@ -42,21 +42,8 @@ exports.createPortfolio = async (req, res) => {
     
     console.log('Creating portfolio with cleaned data:', JSON.stringify(cleanData, null, 2));
     
-    let portfolio;
-    
-    // Create based on type - SIMPLIFIED APPROACH
-    switch (cleanData.type) {
-      case 'TechProject':
-        portfolio = new TechProject(cleanData);
-        break;
-      case 'DigitalMarketingCampaign':
-        portfolio = new DigitalMarketingCampaign(cleanData);
-        break;
-      case 'Portfolio':
-      default:
-        portfolio = new BasicPortfolio(cleanData);
-        break;
-    }
+    // Create the portfolio using the single Portfolio model
+    const portfolio = new Portfolio(cleanData);
     
     // Save the portfolio
     await portfolio.save();
@@ -177,6 +164,15 @@ exports.updatePortfolio = async (req, res) => {
 
 exports.getAllPortfolios = async (req, res) => {
   try {
+    // Add error checking for Portfolio model
+    if (!Portfolio) {
+      console.error('Portfolio model is undefined');
+      return res.status(500).json({
+        success: false,
+        message: 'Portfolio model not properly initialized'
+      });
+    }
+
     const { category, featured, type } = req.query;
     let filter = {};
     
@@ -184,7 +180,11 @@ exports.getAllPortfolios = async (req, res) => {
     if (featured === 'true') filter.featured = true;
     if (type) filter.type = type;
 
+    console.log('Fetching portfolios with filter:', filter);
+    
     const portfolios = await Portfolio.find(filter).sort({ createdAt: -1 });
+    
+    console.log(`Found ${portfolios.length} portfolios`);
     
     res.json({
       success: true,
