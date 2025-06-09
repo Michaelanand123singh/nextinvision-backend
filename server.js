@@ -1,4 +1,3 @@
-// server.js - Updated for Cloudinary
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -12,7 +11,7 @@ require('dotenv').config();
 // Import database connection
 const connectDB = require('./config/database');
 
-// Import Cloudinary configuration (initialize it)
+// Import Cloudinary configuration
 require('./config/cloudinary');
 
 // Import routes
@@ -35,8 +34,8 @@ app.use(helmet());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
@@ -44,40 +43,58 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Body parser middleware
+// Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Data sanitization against NoSQL query injection
+// Data sanitization
 app.use(mongoSanitize());
-
-// Data sanitization against XSS
 app.use(xss());
-
-// Prevent parameter pollution
 app.use(hpp());
 
-// CORS configuration
+// Allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'https://admin.nextinvision.com',
   process.env.FRONTEND_URL
-].filter(Boolean); // Remove any undefined values
+].filter(Boolean);
 
-app.use(cors({
-  origin: allowedOrigins,
+// CORS middleware
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+};
 
-// Static files - Keep for backwards compatibility (optional)
-// Note: With Cloudinary, you won't need this for new uploads
+app.use(cors(corsOptions));
+
+// ✅ Handle preflight requests
+app.options('*', cors(corsOptions));
+
+// 🧪 Debug CORS headers (optional, remove in prod)
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    console.log('CORS Headers:', {
+      'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
+      'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials')
+    });
+  });
+  next();
+});
+
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// API routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/careers', careerRoutes);
 app.use('/api/contacts', contactRoutes);
@@ -87,7 +104,7 @@ app.use('/api/team', teamRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/projects', projectRoutes);
 
-// Health check endpoint
+// Health check route
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -114,80 +131,52 @@ app.use('*', (req, res) => {
 app.use((error, req, res, next) => {
   console.error('Error:', error);
 
-  // Mongoose bad ObjectId
   if (error.name === 'CastError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid ID format'
-    });
+    return res.status(400).json({ success: false, message: 'Invalid ID format' });
   }
 
-  // Mongoose duplicate key
   if (error.code === 11000) {
     const field = Object.keys(error.keyValue)[0];
-    return res.status(400).json({
-      success: false,
-      message: `${field} already exists`
-    });
+    return res.status(400).json({ success: false, message: `${field} already exists` });
   }
 
-  // Mongoose validation error
   if (error.name === 'ValidationError') {
     const errors = Object.values(error.errors).map(err => err.message);
-    return res.status(400).json({
-      success: false,
-      message: 'Validation Error',
-      errors
-    });
+    return res.status(400).json({ success: false, message: 'Validation Error', errors });
   }
 
-  // JWT errors
   if (error.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
+    return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
   if (error.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Token expired'
-    });
+    return res.status(401).json({ success: false, message: 'Token expired' });
   }
 
-  // Cloudinary errors
   if (error.name === 'CloudinaryError') {
-    return res.status(400).json({
-      success: false,
-      message: `Image upload failed: ${error.message}`
-    });
+    return res.status(400).json({ success: false, message: `Image upload failed: ${error.message}` });
   }
 
-  // Default error
   res.status(error.statusCode || 500).json({
     success: false,
     message: error.message || 'Server Error'
   });
 });
 
+// Start server
 const PORT = process.env.PORT || 5000;
-
 const server = app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
   console.log('Allowed CORS origins:', allowedOrigins);
   console.log('Cloudinary configured:', !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET));
 });
 
-// Handle unhandled promise rejections
+// Error handling
 process.on('unhandledRejection', (err, promise) => {
   console.log('Unhandled Rejection:', err.message);
-  server.close(() => {
-    process.exit(1);
-  });
+  server.close(() => process.exit(1));
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.log('Uncaught Exception:', err.message);
   process.exit(1);
