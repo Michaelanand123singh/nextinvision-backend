@@ -1,10 +1,15 @@
-// controllers/portfolioController.js - Improved Version
+// controllers/portfolioController.js - FIXED VERSION
 const { Portfolio, BasicPortfolio, TechProject, DigitalMarketingCampaign } = require('../models/Portfolio');
 
 exports.createPortfolio = async (req, res) => {
   try {
     // Clean up the data before saving
     const cleanData = { ...req.body };
+    
+    // Set default type if not provided
+    if (!cleanData.type) {
+      cleanData.type = 'Portfolio';
+    }
     
     // Clean up arrays - remove empty strings
     if (cleanData.technologies) {
@@ -17,59 +22,81 @@ exports.createPortfolio = async (req, res) => {
     // Clean up metrics - remove empty strings but keep the object structure
     if (cleanData.metrics) {
       Object.keys(cleanData.metrics).forEach(key => {
-        if (cleanData.metrics[key] === '') {
+        if (cleanData.metrics[key] === '' || cleanData.metrics[key] === null || cleanData.metrics[key] === undefined) {
           delete cleanData.metrics[key];
         }
       });
+      
+      // If metrics object is empty after cleanup, remove it
+      if (Object.keys(cleanData.metrics).length === 0) {
+        delete cleanData.metrics;
+      }
     }
     
     // Clean up empty URL fields
     if (cleanData.url === '') delete cleanData.url;
     if (cleanData.image === '') delete cleanData.image;
+    if (cleanData.description === '') delete cleanData.description;
+    if (cleanData.category === '') delete cleanData.category;
+    if (cleanData.client === '') delete cleanData.client;
+    
+    console.log('Creating portfolio with cleaned data:', JSON.stringify(cleanData, null, 2));
     
     let portfolio;
-    const { type = 'Portfolio' } = cleanData; // Default to 'Portfolio' if not specified
     
-    console.log('Creating portfolio with data:', cleanData); // Debug log
-    
-    // Create based on type
-    switch (type) {
+    // Create based on type - SIMPLIFIED APPROACH
+    switch (cleanData.type) {
       case 'TechProject':
-        portfolio = await TechProject.create(cleanData);
+        portfolio = new TechProject(cleanData);
         break;
       case 'DigitalMarketingCampaign':
-        portfolio = await DigitalMarketingCampaign.create(cleanData);
+        portfolio = new DigitalMarketingCampaign(cleanData);
         break;
       case 'Portfolio':
       default:
-        // Use BasicPortfolio discriminator for 'Portfolio' type
-        portfolio = await BasicPortfolio.create(cleanData);
+        portfolio = new BasicPortfolio(cleanData);
+        break;
     }
+    
+    // Save the portfolio
+    await portfolio.save();
     
     res.status(201).json({
       success: true,
       data: portfolio
     });
+    
   } catch (error) {
-    console.error('Portfolio creation error:', error); // Debug log
+    console.error('Portfolio creation error:', error);
     
     // Handle validation errors more gracefully
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => ({
         field: err.path,
-        message: err.message
+        message: err.message,
+        value: err.value
       }));
       
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors
+        errors: errors
       });
     }
     
-    res.status(400).json({
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate entry detected',
+        error: error.keyValue
+      });
+    }
+    
+    res.status(500).json({
       success: false,
-      message: error.message || 'Failed to create portfolio'
+      message: error.message || 'Failed to create portfolio',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -90,15 +117,22 @@ exports.updatePortfolio = async (req, res) => {
     // Clean up metrics
     if (cleanData.metrics) {
       Object.keys(cleanData.metrics).forEach(key => {
-        if (cleanData.metrics[key] === '') {
+        if (cleanData.metrics[key] === '' || cleanData.metrics[key] === null || cleanData.metrics[key] === undefined) {
           delete cleanData.metrics[key];
         }
       });
+      
+      if (Object.keys(cleanData.metrics).length === 0) {
+        delete cleanData.metrics;
+      }
     }
     
-    // Clean up empty URL fields
+    // Clean up empty fields
     if (cleanData.url === '') delete cleanData.url;
     if (cleanData.image === '') delete cleanData.image;
+    if (cleanData.description === '') delete cleanData.description;
+    if (cleanData.category === '') delete cleanData.category;
+    if (cleanData.client === '') delete cleanData.client;
 
     const portfolio = await Portfolio.findByIdAndUpdate(
       req.params.id,
@@ -118,29 +152,29 @@ exports.updatePortfolio = async (req, res) => {
       data: portfolio
     });
   } catch (error) {
-    console.error('Portfolio update error:', error); // Debug log
+    console.error('Portfolio update error:', error);
     
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => ({
         field: err.path,
-        message: err.message
+        message: err.message,
+        value: err.value
       }));
       
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors
+        errors: errors
       });
     }
     
-    res.status(400).json({
+    res.status(500).json({
       success: false,
       message: error.message || 'Failed to update portfolio'
     });
   }
 };
 
-// Keep other methods the same
 exports.getAllPortfolios = async (req, res) => {
   try {
     const { category, featured, type } = req.query;
@@ -158,9 +192,10 @@ exports.getAllPortfolios = async (req, res) => {
       data: portfolios
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Get portfolios error:', error);
+    res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Failed to fetch portfolios'
     });
   }
 };
@@ -181,9 +216,10 @@ exports.getPortfolioById = async (req, res) => {
       data: portfolio
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Get portfolio by ID error:', error);
+    res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Failed to fetch portfolio'
     });
   }
 };
@@ -204,9 +240,10 @@ exports.deletePortfolio = async (req, res) => {
       message: 'Portfolio deleted successfully'
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Delete portfolio error:', error);
+    res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Failed to delete portfolio'
     });
   }
 };
