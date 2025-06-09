@@ -1,4 +1,4 @@
-// server.js
+// server.js - Updated for Cloudinary
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -11,6 +11,9 @@ require('dotenv').config();
 
 // Import database connection
 const connectDB = require('./config/database');
+
+// Import Cloudinary configuration (initialize it)
+require('./config/cloudinary');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -54,7 +57,7 @@ app.use(xss());
 // Prevent parameter pollution
 app.use(hpp());
 
-// CORS configuration - UPDATED TO FIX THE ISSUE
+// CORS configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -70,7 +73,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Static files
+// Static files - Keep for backwards compatibility (optional)
+// Note: With Cloudinary, you won't need this for new uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API routes
@@ -87,10 +91,14 @@ app.use('/api/projects', projectRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: 'Server is running',
+    message: 'Server is running with Cloudinary integration',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    allowedOrigins: allowedOrigins // Add this to debug CORS configuration
+    allowedOrigins: allowedOrigins,
+    cloudinary: {
+      configured: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'Not configured'
+    }
   });
 });
 
@@ -148,6 +156,14 @@ app.use((error, req, res, next) => {
     });
   }
 
+  // Cloudinary errors
+  if (error.name === 'CloudinaryError') {
+    return res.status(400).json({
+      success: false,
+      message: `Image upload failed: ${error.message}`
+    });
+  }
+
   // Default error
   res.status(error.statusCode || 500).json({
     success: false,
@@ -160,6 +176,7 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   console.log('Allowed CORS origins:', allowedOrigins);
+  console.log('Cloudinary configured:', !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET));
 });
 
 // Handle unhandled promise rejections
